@@ -141,7 +141,7 @@ jobs:
             echo "### Infrastructure plan (\`SqlSenseData\`)"
             echo "Deploys on merge to \`main\` after approval in the \`production\` environment."
             echo '```'
-            grep -vE "AI agent|feature flags" cdk-diff.txt | tail -c 60000
+            grep -vE "AI agent|feature flags|lookup-role|Lookup role" cdk-diff.txt | tail -c 60000
             echo '```'
           } > plan.md
           gh pr comment ${{ github.event.pull_request.number }} --body-file plan.md --edit-last --create-if-none
