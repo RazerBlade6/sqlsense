@@ -1,0 +1,126 @@
+# Eval questions for the SQL agent. Scored by executing gold_sql and the agent's SQL and comparing
+# results (execution accuracy), never by comparing SQL text.
+#
+#   compare:  gold columns that must appear (by value) in the agent's result; default all.
+#             Leave label columns out when their format can legitimately vary (e.g. month names).
+#   ordered:  rows must come back in the gold order (top-N, time series).
+#   category: aggregate | join | time | definition | promotion
+#             "definition" questions depend on metric definitions the schema alone doesn't give.
+
+questions:
+  - id: q01
+    category: aggregate
+    question: What were total sales across the whole dataset?
+    gold_sql: SELECT round(sum(sales_value), 2) AS total_sales FROM fact_transactions
+
+  - id: q02
+    category: aggregate
+    question: How many shopping trips were made in total?
+    gold_sql: SELECT count(DISTINCT basket_id) AS trips FROM fact_transactions
+
+  - id: q03
+    category: aggregate
+    question: How many households redeemed at least one coupon?
+    gold_sql: SELECT count(DISTINCT household_id) AS households FROM fact_coupon_redemption
+
+  - id: q04
+    category: join
+    question: Which 5 departments had the highest sales?
+    ordered: true
+    gold_sql: |
+      SELECT p.department, round(sum(t.sales_value), 2) AS sales
+      FROM fact_transactions t JOIN dim_product p ON t.product_id = p.product_id
+      GROUP BY 1 ORDER BY 2 DESC LIMIT 5
+
+  - id: q05
+    category: join
+    question: What percentage of sales came from private label products?
+    gold_sql: |
+      SELECT round(100 * sum(CASE WHEN p.brand = 'Private' THEN t.sales_value ELSE 0 END) / sum(t.sales_value), 2) AS private_label_pct
+      FROM fact_transactions t LEFT JOIN dim_product p ON t.product_id = p.product_id
+
+  - id: q06
+    category: join
+    question: Which 10 product categories in the grocery department sold the most units?
+    ordered: true
+    gold_sql: |
+      SELECT p.product_category, sum(t.quantity) AS units
+      FROM fact_transactions t JOIN dim_product p ON t.product_id = p.product_id
+      WHERE p.department = 'GROCERY'
+      GROUP BY 1 ORDER BY 2 DESC LIMIT 10
+
+  - id: q07
+    category: join
+    question: How many households received each type of campaign?
+    gold_sql: |
+      SELECT c.campaign_type, count(DISTINCT b.household_id) AS households
+      FROM bridge_campaign_household b JOIN dim_campaign c ON b.campaign_id = c.campaign_id
+      GROUP BY 1
+
+  - id: q08
+    category: time
+    question: Show weekly sales for the last 8 weeks.
+    ordered: true
+    gold_sql: |
+      SELECT week, round(sum(sales_value), 2) AS sales
+      FROM fact_transactions WHERE week BETWEEN 46 AND 53
+      GROUP BY 1 ORDER BY 1
+
+  - id: q09
+    category: time
+    question: What were total sales in each month of 2017?
+    ordered: true
+    compare: [sales]
+    gold_sql: |
+      SELECT month(transaction_date) AS month, round(sum(sales_value), 2) AS sales
+      FROM fact_transactions WHERE year(transaction_date) = 2017
+      GROUP BY 1 ORDER BY 1
+
+  - id: q10
+    category: time
+    question: How many shopping trips happened on weekends versus weekdays?
+    compare: [trips]
+    gold_sql: |
+      SELECT d.is_weekend, count(DISTINCT t.basket_id) AS trips
+      FROM fact_transactions t JOIN dim_date d ON t.transaction_date = d.date_day
+      GROUP BY 1
+
+  - id: q11
+    category: time
+    question: What were sales by quarter in 2017?
+    ordered: true
+    compare: [sales]
+    gold_sql: |
+      SELECT quarter(transaction_date) AS quarter, round(sum(sales_value), 2) AS sales
+      FROM fact_transactions WHERE year(transaction_date) = 2017
+      GROUP BY 1 ORDER BY 1
+
+  - id: q12
+    category: definition
+    question: What is the average basket value?
+    gold_sql: |
+      SELECT round(avg(basket_value), 2) AS avg_basket_value
+      FROM (SELECT basket_id, sum(sales_value) AS basket_value FROM fact_transactions GROUP BY 1)
+
+  - id: q13
+    category: definition
+    question: What is the average basket value for each income band?
+    gold_sql: |
+      SELECT h.income, round(avg(b.basket_value), 2) AS avg_basket_value
+      FROM (SELECT basket_id, household_id, sum(sales_value) AS basket_value FROM fact_transactions GROUP BY 1, 2) b
+      JOIN dim_household_demographics h ON b.household_id = h.household_id
+      GROUP BY 1
+
+  - id: q14
+    category: definition
+    question: What percentage of purchasing households have demographic data?
+    gold_sql: |
+      SELECT round(100.0 * count(DISTINCT h.household_id) / count(DISTINCT t.household_id), 2) AS pct_with_demographics
+      FROM fact_transactions t LEFT JOIN dim_household_demographics h ON t.household_id = h.household_id
+
+  - id: q15
+    category: promotion
+    question: How many products were featured on the front page of the mailer in week 10?
+    gold_sql: |
+      SELECT count(DISTINCT product_id) AS products
+      FROM fact_promotion WHERE week = 10 AND mailer_location = 'D'

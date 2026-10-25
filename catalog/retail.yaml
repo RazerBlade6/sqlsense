@@ -1,0 +1,117 @@
+# Retail warehouse catalog: the single source of truth for table structure.
+# Read by data/build.py (Parquet), infra (Glue tables) and the backend (DuckDB views,
+# schema text for the SQL agent). Types are Athena/Hive types.
+#
+# Source: "The Complete Journey 2.0" (84.51°), via the CC0-licensed completejourney R
+# package. One year (2017) of grocery purchases by 2,469 households.
+
+database: retail
+
+tables:
+  - name: fact_transactions
+    source: transactions
+    description: One row per product line in a shopping basket. 2,469 households, 2017.
+    grain: basket_id + product_id
+    partition_by: week
+    columns:
+      - {name: household_id, type: bigint, comment: Household making the purchase. Joins dim_household_demographics (only 801 households have demographics).}
+      - {name: store_id, type: bigint, comment: Store where the basket was purchased. No store dimension exists.}
+      - {name: basket_id, type: bigint, comment: Shopping trip (basket). Count distinct basket_id to count trips.}
+      - {name: product_id, type: bigint, comment: "Product purchased. Joins dim_product; 4,836 lines have no match, so use a LEFT JOIN when totals must include all sales."}
+      - {name: quantity, type: double, comment: "Units purchased. FUEL department and COUPON/MISC ITEMS category lines record volume, not item counts; exclude them only when counting units. sales_value is unaffected."}
+      - {name: sales_value, type: double, comment: Dollars received by the retailer for this line after discounts. Use for revenue/sales.}
+      - {name: retail_disc, type: double, comment: Loyalty-card discount in dollars (positive number).}
+      - {name: coupon_disc, type: double, comment: Manufacturer coupon discount in dollars (positive number).}
+      - {name: coupon_match_disc, type: double, comment: Retailer match of the manufacturer coupon in dollars (positive number).}
+      - {name: transaction_timestamp, type: timestamp, comment: Date and time of purchase.}
+      - {name: transaction_date, type: date, comment: Calendar date of purchase. Joins dim_date.}
+      - {name: week, type: int, comment: "Dataset week number, 1-53 (partition key). Filter on week to reduce data scanned."}
+
+  - name: fact_promotion
+    source: promotions
+    description: Weekly in-store display and mailer placement for products, by store.
+    grain: product_id + store_id + week
+    partition_by: week
+    columns:
+      - {name: product_id, type: bigint, comment: Promoted product. Joins dim_product.}
+      - {name: store_id, type: bigint, comment: Store running the promotion.}
+      - {name: display_location, type: string, comment: "In-store display code: 0 not on display, 1 store front, 2 store rear, 3 front end cap, 4 mid-aisle end cap, 5 rear end cap, 6 side-aisle end cap, 7 in-aisle, 9 secondary location display, A in-shelf."}
+      - {name: mailer_location, type: string, comment: "Mailer code: 0 not on ad, A interior feature, C interior line item, D front page feature, F back page feature, H wrap front, J wrap interior coupon, L wrap back, P interior coupon, X free interior, Z free front/back/wrap."}
+      - {name: week, type: int, comment: "Dataset week number, 1-53 (partition key)."}
+
+  - name: dim_product
+    source: products
+    description: Product master data.
+    grain: product_id
+    columns:
+      - {name: product_id, type: bigint, comment: Product key.}
+      - {name: manufacturer_id, type: bigint, comment: Manufacturer of the product.}
+      - {name: department, type: string, comment: "Top-level department, e.g. GROCERY, DRUG GM, PRODUCE, MEAT, FUEL."}
+      - {name: brand, type: string, comment: "'National' or 'Private' (private label, the store's own brand)."}
+      - {name: product_category, type: string, comment: "Category within the department, e.g. SOFT DRINKS."}
+      - {name: product_type, type: string, comment: Most granular product grouping.}
+      - {name: package_size, type: string, comment: "Free-text package size, e.g. 12 OZ."}
+
+  - name: dim_household_demographics
+    source: demographics
+    description: Demographics for the 801 households (of 2,469) that provided them. Inner joins to transactions drop the other households.
+    grain: household_id
+    columns:
+      - {name: household_id, type: bigint, comment: Household key.}
+      - {name: age, type: string, comment: "Age band of the head of household, e.g. 25-34, 65+."}
+      - {name: income, type: string, comment: "Income band, e.g. 35-49K, 250K+."}
+      - {name: home_ownership, type: string, comment: "Homeowner, Renter, Probable Homeowner or Probable Renter; null when unknown."}
+      - {name: marital_status, type: string, comment: "Married or Unmarried; null when unknown."}
+      - {name: household_size, type: string, comment: "Number of people, 1 to 5+."}
+      - {name: household_comp, type: string, comment: "Composition, e.g. 2 Adults Kids, 1 Adult No Kids."}
+      - {name: kids_count, type: string, comment: "Number of children, 0 to 3+."}
+
+  - name: dim_campaign
+    source: campaign_descriptions
+    description: Marketing campaigns and when they ran. Some start before 2017 or end after it, outside the transaction period.
+    grain: campaign_id
+    columns:
+      - {name: campaign_id, type: bigint, comment: Campaign key.}
+      - {name: campaign_type, type: string, comment: "Type A, Type B or Type C. See campaign documentation for how each type targets households."}
+      - {name: start_date, type: date, comment: First day of the campaign.}
+      - {name: end_date, type: date, comment: Last day of the campaign.}
+
+  - name: bridge_campaign_household
+    source: campaigns
+    description: Which households received which campaigns.
+    grain: campaign_id + household_id
+    columns:
+      - {name: campaign_id, type: bigint, comment: Joins dim_campaign.}
+      - {name: household_id, type: bigint, comment: Household that received the campaign.}
+
+  - name: dim_coupon
+    source: coupons
+    description: Coupons and the products each coupon can be redeemed on, per campaign.
+    grain: coupon_upc + product_id + campaign_id
+    columns:
+      - {name: coupon_upc, type: string, comment: Coupon identifier.}
+      - {name: product_id, type: bigint, comment: Product the coupon applies to.}
+      - {name: campaign_id, type: bigint, comment: Campaign that issued the coupon.}
+
+  - name: fact_coupon_redemption
+    source: coupon_redemptions
+    description: Coupons redeemed by households.
+    grain: household_id + coupon_upc + campaign_id + redemption_date
+    columns:
+      - {name: household_id, type: bigint, comment: Household redeeming the coupon.}
+      - {name: coupon_upc, type: string, comment: Coupon redeemed. Joins dim_coupon.}
+      - {name: campaign_id, type: bigint, comment: Campaign the coupon came from.}
+      - {name: redemption_date, type: date, comment: Date of redemption.}
+
+  - name: dim_date
+    source: derived
+    description: "Calendar for 2017-01-01 to 2018-01-01. For dataset weeks, use fact_transactions.week."
+    grain: date_day
+    columns:
+      - {name: date_day, type: date, comment: Calendar date. Joins fact_transactions.transaction_date.}
+      - {name: day_of_week, type: string, comment: "Monday to Sunday."}
+      - {name: is_weekend, type: boolean, comment: True on Saturday and Sunday.}
+      - {name: month, type: int, comment: "Month number, 1-12."}
+      - {name: month_name, type: string, comment: "January to December."}
+      - {name: quarter, type: int, comment: "Quarter, 1-4."}
+      - {name: year, type: int, comment: Calendar year.}

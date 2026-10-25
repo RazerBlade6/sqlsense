@@ -108,37 +108,38 @@ Single `production` environment. Branch flow: `dev` → PR → `main`.
 | Stage | Trigger | What runs |
 |---|---|---|
 | CI | push to `dev`/`main`, any PR | ruff, pytest, frontend lint/build, `cdk synth`, live Bedrock test (OIDC) |
-| Plan | PR into `main` | `cdk diff` posted as a PR comment |
+| Plan | PR into `main` | `cdk diff` posted as a PR comment (read-only CI role) |
 | Deploy | merge to `main` | GitHub `production` environment (manual approval, `main` only) → `sqlsense-github-deploy` → `cdk deploy` |
-| Verify | after deploy | smoke test of the live API, then evals against the deployed stack |
+| Verify | after deploy | smoke test (Athena row counts equal the build manifest), then the eval on Athena |
 
 `main` is protected: changes go through a PR, all CI checks must pass on an up-to-date branch, and force pushes and deletion are blocked. `SqlSenseFoundation` (budget, OIDC roles) is deployed manually and never by CD, so the pipeline can't change its own permissions.
 
 Hardening backlog: cdk-nag in `cdk synth`; re-bootstrap with a least-privilege CloudFormation execution policy instead of the default `AdministratorAccess`; a staging environment with eval-gated promotion.
 
-## Phase 1: Data lake + SQL agent on Athena (~1.5–2 weeks)
+## Phase 1: Data lake + SQL agent on Athena ✅
 
-**Data**
-- [ ] `data/to_parquet.py`: convert the CSVs to Parquet (pyarrow), with `transaction_data` partitioned by `week_no`.
-- [ ] Star schema: `fact_transactions`, `dim_product`, `dim_household`, `dim_campaign`, `fact_coupon_redemption`, `fact_causal`, plus a `dim_date` built from the integer `DAY`/`WEEK_NO` so date questions read naturally.
-- [ ] Load into `s3://…/raw/` and `…/curated/`; run a Glue crawler into a `retail` database. Add column comments to Glue tables (the SQL agent reads them).
-- [ ] **CDK `DataStack`:** encrypted buckets with public access blocked and lifecycle rules on Athena results; Glue DB + crawler; Athena workgroup with `EnforceWorkGroupConfiguration` and `BytesScannedCutoffPerQuery` (e.g. 1 GB); `QueryRole` limited to Athena on that workgroup, `glue:Get*` on `retail`, and `s3:GetObject` on `curated/`.
+**Data** (details in [DATA.md](DATA.md))
+- [x] `catalog/retail.yaml` is the single source of truth for 9 tables (star schema: transactions, promotions, products, household demographics, campaigns, coupons, dates). Every column has a comment the agent reads.
+- [x] `data/build.py`: pinned, checksummed download of The Complete Journey 2.0 (CC0) → strict casts → zstd Parquet, with the large fact tables partitioned by `week`. Builds are deterministic, and a row-count manifest is written.
+- [x] **CDK `SqlSenseData`:** private, TLS-only bucket; data published as a CDK asset; explicit Glue tables with partition projection (no crawler); Athena workgroup with enforced settings, a 100 MB per-query scan cap and managed query results; read-only `sqlsense-warehouse-read` policy.
 
 **SQL agent**
-- [ ] `warehouse/athena.py`: start the query, poll, page results, return rows plus `bytes_scanned` and the execution ID.
-- [ ] `warehouse/duckdb_local.py`: same interface, reading the local Parquet files.
-- [ ] `catalog.py`: compact schema text from Glue. Once there are 6+ tables, prune the schema per question by picking relevant tables from embeddings of table and column descriptions.
-- [ ] Safety: `read="athena"`, a Trino function blocklist, reject anything not a SELECT, enforce `LIMIT`. Keep the existing tests and add Athena-specific cases.
-- [ ] Retry loop: feed Athena error messages back. Add an `EXPLAIN` pre-check that catches syntax errors before paying for a scan.
-- [ ] Few-shot examples: 8–10 verified question → SQL pairs, retrieved by similarity.
+- [x] `Warehouse` interface: `athena.py` (Glue schema, polling with backoff, typed results, bytes scanned) and `duckdb_local.py` (same Parquet, Athena SQL transpiled by sqlglot, sandboxed to the warehouse directory).
+- [x] Safety rewritten on the syntax tree: single SELECT only, an allowlist of catalog tables and CTEs (rejects table functions such as `read_csv`), comment detection by tokenizing, and a LIMIT added when missing.
+- [x] Retry loop feeds validation and Athena errors back, and records each attempt for the UI trace.
+- [x] Postgres/SQLAlchemy removed.
+- Dropped: an `EXPLAIN` pre-check. Athena doesn't bill queries that fail at planning, so it would add about 1s per question with no savings.
+- Deferred: schema pruning (unnecessary at 9 tables) and few-shot examples. Examples drawn from the eval set would inflate scores; they come back with a held-out set.
 
-**Eval v0**
-- [ ] `evals/questions.yaml` with 15 questions that each have gold SQL. Score by result-set match (order-insensitive, numeric tolerance), not by comparing SQL text.
-- [ ] Run it from the CLI; record the baseline in `evals/results/`.
+**Eval v0** (details in [EVALS.md](EVALS.md))
+- [x] 15 questions with gold SQL, scored by execution accuracy. Baseline on Nova Pro: **87% DuckDB / 80% Athena**; every miss is a definition question.
+- [x] CI runs the eval on DuckDB for every push and PR; CD runs it on Athena after each deploy. Both gates are set at 70%.
 
-- [ ] CD: `cd.yml` (plan → approve → deploy → smoke test) owning `DataStack`.
+**CD**
+- [x] `cd.yml`: on merge to `main` → `production` approval → `cdk deploy SqlSenseData` (OIDC deploy role) → smoke test (Athena row counts equal the build manifest) → Athena eval.
+- [x] PRs into `main` get a `cdk diff` comment from the read-only CI role.
 
-**Done when:** `POST /query` answers "top 10 commodities by sales in the last 13 weeks" against Athena, and the baseline accuracy is recorded.
+**Done when:** `POST /query` answers "top 10 categories by sales in the last 13 weeks" against Athena ✅ (weeks 41–53, partition-filtered, 1.7 MB scanned, 1.3 s). Baseline recorded ✅.
 
 ## Phase 2: RAG, planner, memory, UI (~2 weeks)
 
@@ -169,6 +170,7 @@ Hardening backlog: cdk-nag in `cdk synth`; re-bootstrap with a least-privilege C
 
 **Eval in CI**
 - [ ] ~50 questions across categories: simple aggregates (10), joins (10), time windows (8), definition-dependent "both" questions (8), docs-only (6), follow-ups (4), and adversarial/refusal cases (4).
+- [ ] Report the mean and spread of several runs: single runs vary by about one question even at temperature 0.
 - [ ] Metrics: execution accuracy, routing accuracy, retrieval recall@k, docs-answer faithfulness (an LLM judge checked against reference answers), p50/p95 latency, $/question, average bytes scanned.
 - [ ] `eval.yml`: run on PRs that touch `backend/`, `corpus/` or `evals/` (via the OIDC role). Post a markdown table comment with the change against `main`, and fail if accuracy drops by more than 3 points.
 

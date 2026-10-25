@@ -2,7 +2,7 @@
 
 Natural-language analytics over SQL data, built with agents.
 
-> **Status: v2 upgrade in progress.** v1 (working today) turns plain-English questions into safe, read-only PostgreSQL queries. v2 makes it a multi-agent analytics assistant over a retail data warehouse on AWS.
+> **Status: Phase 1 done.** The SQL agent answers plain-English questions over a retail warehouse on S3/Glue/Athena, scoring 80% on the eval suite (see [docs/EVALS.md](docs/EVALS.md)). Next: document retrieval, a planner, memory and the UI.
 
 ## v2 at a glance
 
@@ -24,12 +24,16 @@ FastAPI · LangGraph · sqlglot · Next.js + Recharts · MCP. v2 adds Amazon Bed
 backend/    FastAPI app, LangGraph agent, MCP server, SQL safety checks
 frontend/   Next.js UI with Recharts visualizations
 infra/      AWS CDK app (Python)
-docs/       Roadmap, setup and design docs
+catalog/    Warehouse catalog (single source of truth for tables)
+data/       Dataset download and Parquet build
+evals/      Eval questions and results
+docs/       Roadmap, setup, data and eval docs
 ```
 
 ## Quickstart
 
 ```bash
+cd data && uv sync && uv run python build.py      # build the retail warehouse
 cd backend && uv sync && uv run uvicorn app.api:app --reload --port 8000
 cd frontend && npm install && npm run dev
 ```

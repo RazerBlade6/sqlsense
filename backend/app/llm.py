@@ -10,11 +10,19 @@ StructuredOutputMethod = Literal["function_calling", "json_schema"]
 
 
 def get_chat_model(model_id: str, settings: Settings) -> ChatBedrockConverse:
-    """Bedrock Converse chat model. Sampling params stay unset: newer Claude models reject them."""
+    """Bedrock Converse chat model.
+
+    Temperature 0 keeps runs repeatable where it's supported; newer Claude models reject
+    sampling parameters, so they run with defaults.
+    """
+    kwargs: dict[str, Any] = {}
+    if "anthropic." not in model_id:
+        kwargs["temperature"] = 0
     return ChatBedrockConverse(
         model=model_id,
         region_name=settings.aws_region,
         max_tokens=settings.llm_max_tokens,
+        **kwargs,
     )
 
 

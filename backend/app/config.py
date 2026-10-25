@@ -1,7 +1,11 @@
 from functools import lru_cache
+from pathlib import Path
+from typing import Literal
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from app.warehouse.catalog import DEFAULT_CATALOG_PATH
 
 
 class Settings(BaseSettings):
@@ -11,15 +15,15 @@ class Settings(BaseSettings):
     sql_model_id: str = Field(default="apac.amazon.nova-pro-v1:0", alias="SQL_MODEL_ID")
     planner_model_id: str = Field(default="apac.amazon.nova-micro-v1:0", alias="PLANNER_MODEL_ID")
     llm_max_tokens: int = Field(default=4096, alias="LLM_MAX_TOKENS")
-    database_url: str = Field(alias="DATABASE_URL")
-    db_include_schemas: str = Field(default="public", alias="DB_INCLUDE_SCHEMAS")
-    max_result_rows: int = Field(default=100, alias="MAX_RESULT_ROWS")
-    sql_statement_timeout_ms: int = Field(default=8000, alias="SQL_STATEMENT_TIMEOUT_MS")
-    cors_origins: str = Field(default="http://localhost:3000", alias="CORS_ORIGINS")
 
-    @property
-    def schema_names(self) -> list[str]:
-        return [schema.strip() for schema in self.db_include_schemas.split(",") if schema.strip()]
+    warehouse: Literal["duckdb", "athena"] = Field(default="duckdb", alias="WAREHOUSE")
+    catalog_path: Path = Field(default=DEFAULT_CATALOG_PATH, alias="CATALOG_PATH")
+    duckdb_data_path: Path | None = Field(default=None, alias="DUCKDB_DATA_PATH")
+    athena_workgroup: str = Field(default="sqlsense", alias="ATHENA_WORKGROUP")
+    glue_database: str = Field(default="retail", alias="GLUE_DATABASE")
+
+    max_result_rows: int = Field(default=100, alias="MAX_RESULT_ROWS")
+    cors_origins: str = Field(default="http://localhost:3000", alias="CORS_ORIGINS")
 
     @property
     def cors_origin_list(self) -> list[str]:
@@ -28,4 +32,4 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_settings() -> Settings:
-    return Settings()  # type: ignore
+    return Settings()
