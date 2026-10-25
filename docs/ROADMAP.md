@@ -101,6 +101,21 @@ The AWS account is a single-Region project in **ap-southeast-2**, and its manage
 
 **Done when:** the SQL agent generates safe SQL through Bedrock (verified by `pytest -m live`) and CI is green. *Running v1 end to end on local Postgres was dropped: Phase 1 replaces Postgres with DuckDB/Athena.*
 
+## Delivery pipeline
+
+Single `production` environment. Branch flow: `dev` → PR → `main`.
+
+| Stage | Trigger | What runs |
+|---|---|---|
+| CI | push to `dev`/`main`, any PR | ruff, pytest, frontend lint/build, `cdk synth`, live Bedrock test (OIDC) |
+| Plan | PR into `main` | `cdk diff` posted as a PR comment |
+| Deploy | merge to `main` | GitHub `production` environment (manual approval, `main` only) → `sqlsense-github-deploy` → `cdk deploy` |
+| Verify | after deploy | smoke test of the live API, then evals against the deployed stack |
+
+`main` is protected: changes go through a PR, all CI checks must pass on an up-to-date branch, and force pushes and deletion are blocked. `SqlSenseFoundation` (budget, OIDC roles) is deployed manually and never by CD, so the pipeline can't change its own permissions.
+
+Hardening backlog: cdk-nag in `cdk synth`; re-bootstrap with a least-privilege CloudFormation execution policy instead of the default `AdministratorAccess`; a staging environment with eval-gated promotion.
+
 ## Phase 1: Data lake + SQL agent on Athena (~1.5–2 weeks)
 
 **Data**
@@ -120,6 +135,8 @@ The AWS account is a single-Region project in **ap-southeast-2**, and its manage
 **Eval v0**
 - [ ] `evals/questions.yaml` with 15 questions that each have gold SQL. Score by result-set match (order-insensitive, numeric tolerance), not by comparing SQL text.
 - [ ] Run it from the CLI; record the baseline in `evals/results/`.
+
+- [ ] CD: `cd.yml` (plan → approve → deploy → smoke test) owning `DataStack`.
 
 **Done when:** `POST /query` answers "top 10 commodities by sales in the last 13 weeks" against Athena, and the baseline accuracy is recorded.
 
