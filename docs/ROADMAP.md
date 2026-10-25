@@ -43,7 +43,7 @@ Shared: Bedrock LLMs · CloudWatch/X-Ray traces · eval suite in CI · AWS CDK
 | Vector store | **Aurora PostgreSQL Serverless v2 + pgvector**, min 0 ACU, accessed through the **RDS Data API** | The Data API (HTTPS) lets the Lambda stay out of a VPC. The cost is a ~15s cold resume. |
 | Hosting fallback | ECS Fargate in a public subnet (no NAT), RDS in a private subnet | Use this if Lambda + Data API causes friction. About $35–40/month idle because of the ALB. |
 | Frontend | Static Next export on S3 + CloudFront | Cheap and simple |
-| LLMs | Claude on Bedrock: Haiku-class for the planner and data-quality summaries, Sonnet-class for SQL and synthesis. Model IDs set in config. | Cost and latency split |
+| LLMs | Claude on Bedrock: Haiku 5.5 for the planner and data-quality summaries, Sonnet 5.5 for SQL and synthesis. Amazon Nova Micro/Pro until Claude access is live. Model IDs set in config. | Cost and latency split |
 | Embeddings | Titan Text Embeddings V2 (1024-dim) | Native to Bedrock, cheap |
 | Orchestration | LangGraph supervisor graph | Already a dependency; supports planning, tool use and loops |
 | Memory | DynamoDB, `PK=session_id`, `SK=turn#<ts>`, with TTL | Supports follow-up questions |
@@ -80,16 +80,26 @@ sqlsense/
 
 ---
 
-## Phase 0: Foundations (~2–3 days)
+## Platform constraints
 
-- [ ] AWS Budgets alarms ($10 and $25) before anything else; turn on Cost Anomaly Detection.
-- [ ] Sign in through IAM Identity Center (no root use, no long-lived access keys). Enable Bedrock model access in one region.
-- [ ] `cdk bootstrap`; create an empty CDK app in `infra/`.
-- [ ] GitHub OIDC → IAM role for CI (no stored AWS keys).
-- [ ] Restructure the backend into the target layout. Add `llm.py` using `ChatBedrockConverse` (langchain-aws) and drop OpenAI.
-- [ ] Set up `uv`, `ruff` and `pytest` in `ci.yml` (lint plus unit tests on every PR).
+The AWS account is a single-Region project in **ap-southeast-2**, and its managed service control policies shape a few choices:
 
-**Done when:** v1 still works on local Postgres, but through Bedrock, and CI is green.
+| Constraint | Consequence |
+|---|---|
+| One Region only | Everything deploys to ap-southeast-2. Bedrock calls go through `au.*` (Claude) or `apac.*` (Nova) cross-Region inference profiles. |
+| IAM Identity Center unavailable | Human sign-in is managed by the platform (`aws login` locally). |
+| App Runner unavailable | Confirms Lambda for hosting. |
+
+## Phase 0: Foundations ✅
+
+- [x] AWS Budgets alarm ($25/month; alerts at 50%, 100% and forecast 100%). The alert email lives in SSM (`/sqlsense/budget-email`), not the repo.
+- [x] Bedrock model access: Nova and Titan working. Claude agreements accepted; invocation is pending account review.
+- [x] `cdk bootstrap`; CDK app in `infra/` with a `SqlSenseFoundation` stack.
+- [x] GitHub OIDC with no stored AWS keys: `sqlsense-github-ci` (Bedrock invoke only; branches and PRs) and `sqlsense-github-deploy` (can only assume the CDK bootstrap roles; GitHub `production` environment only). Sessions last at most 1 hour.
+- [x] Backend moved to `uv` and Python 3.13. `app/llm.py` wraps `ChatBedrockConverse` with model IDs set in config; OpenAI removed. Claude uses Bedrock JSON-schema structured output, because newer Claude models reject forced tool choice.
+- [x] `ci.yml`: ruff, pytest, frontend lint/build and `cdk synth` on every PR, plus a live Bedrock test.
+
+**Done when:** the SQL agent generates safe SQL through Bedrock (verified by `pytest -m live`) and CI is green. *Running v1 end to end on local Postgres was dropped: Phase 1 replaces Postgres with DuckDB/Athena.*
 
 ## Phase 1: Data lake + SQL agent on Athena (~1.5–2 weeks)
 

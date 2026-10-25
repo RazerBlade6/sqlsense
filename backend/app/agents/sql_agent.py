@@ -1,12 +1,12 @@
 from typing import Any, Literal, TypedDict
 
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_openai import ChatOpenAI
 from langgraph.graph import END, StateGraph
 from pydantic import BaseModel, Field
 from sqlalchemy.engine import Engine
 
 from app.config import Settings
+from app.llm import with_structured_output
 from app.models import ChartSpec, QueryResponse
 from app.safety import SQLSafetyError, validate_select_sql
 from app.schema import build_schema_summary, execute_read_only_sql
@@ -38,13 +38,7 @@ class SQLQueryAgent:
     def __init__(self, engine: Engine, settings: Settings):
         self.engine = engine
         self.settings = settings
-        llm_kwargs: dict[str, Any] = {
-            "model": settings.openai_model,
-            "temperature": 0,
-        }
-        if settings.openai_api_key:
-            llm_kwargs["api_key"] = settings.openai_api_key
-        self.llm = ChatOpenAI(**llm_kwargs)
+        self.sql_llm = with_structured_output(settings.sql_model_id, GeneratedSQL, settings)
         self.graph = self._build_graph()
 
     def run(self, question: str, max_attempts: int = 3) -> QueryResponse:
@@ -102,9 +96,11 @@ class SQLQueryAgent:
         attempts = state.get("attempts", 0) + 1
         feedback = state.get("error") or "No previous error."
 
-        prompt = ChatPromptTemplate.from_messages([(
-            "system",
-            """
+        prompt = ChatPromptTemplate.from_messages(
+            [
+                (
+                    "system",
+                    """
             You are a senior analytics engineer generating PostgreSQL for a read-only reporting app.
 
             Rules:
@@ -116,10 +112,10 @@ class SQLQueryAgent:
             - If previous SQL failed, use the error feedback to repair it.
             - Choose a chart type that fits the returned columns.
             """,
-        ),
-        (
-            "human",
-            """
+                ),
+                (
+                    "human",
+                    """
             Database schema:
             {schema}
 
@@ -129,9 +125,11 @@ class SQLQueryAgent:
             Previous error or feedback:
             {feedback}
             """,
-        ),])
+                ),
+            ]
+        )
 
-        chain = prompt | self.llm.with_structured_output(GeneratedSQL)
+        chain = prompt | self.sql_llm
         raw_generated = chain.invoke(
             {
                 "schema": state.get("schema", ""),

@@ -2,7 +2,6 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-
 ChartType = Literal["table", "bar", "line", "pie", "number"]
 
 

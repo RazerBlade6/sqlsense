@@ -23,15 +23,15 @@ FastAPI · LangGraph · sqlglot · Next.js + Recharts · MCP. v2 adds Amazon Bed
 ```text
 backend/    FastAPI app, LangGraph agent, MCP server, SQL safety checks
 frontend/   Next.js UI with Recharts visualizations
+infra/      AWS CDK app (Python)
 docs/       Roadmap, setup and design docs
 ```
 
-## Quickstart (v1)
+## Quickstart
 
 ```bash
-docker compose up -d
-cd backend && pip install -e ".[dev]" && uvicorn app.main:app --reload --port 8000
+cd backend && uv sync && uv run uvicorn app.api:app --reload --port 8000
 cd frontend && npm install && npm run dev
 ```
 
-Full setup, the API and the safety model are in [docs/LOCAL_SETUP.md](docs/LOCAL_SETUP.md).
+Requires AWS credentials with Bedrock access (`aws login`). Full setup, tests, infrastructure and the safety model are in [docs/LOCAL_SETUP.md](docs/LOCAL_SETUP.md).

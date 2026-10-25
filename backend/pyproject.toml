@@ -1,32 +1,49 @@
 [project]
 name = "sqlsense-backend"
-version = "0.1.0"
-description = "Agentic natural-language SQL querying backend for PostgreSQL"
-requires-python = ">=3.11"
+version = "0.2.0"
+description = "Multi-agent analytics assistant backend: LangGraph agents on Amazon Bedrock"
+requires-python = ">=3.13,<3.14"
 dependencies = [
-  "fastapi>=0.115.0",
+  "fastapi>=0.162.0",
   "uvicorn[standard]>=0.30.0",
   "pydantic>=2.8.0",
   "pydantic-settings>=2.4.0",
   "sqlalchemy>=2.0.32",
   "psycopg[binary]>=3.2.1",
-  "sqlglot>=25.20.0",
-  "langchain>=0.2.14",
-  "langchain-openai>=0.1.22",
-  "langgraph>=0.2.14",
-  "mcp>=1.0.0"
+  "sqlglot>=30.0.0",
+  "boto3>=1.43.0",
+  "langchain-core>=1.7.0",
+  "langchain-aws>=1.9.0",
+  "langgraph>=1.2.0",
+  "mcp>=2.3.0",
 ]
 
-[project.optional-dependencies]
+[dependency-groups]
 dev = [
+  "botocore[crt]>=1.43.118",
   "pytest>=8.3.0",
-  "ruff>=0.6.0"
+  "ruff>=0.6.0",
 ]
+
+[tool.uv]
+package = false
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
+markers = [
+  "live: calls real AWS services (Bedrock); deselect with -m 'not live'",
+]
+addopts = "-m 'not live'"
 
 [tool.ruff]
 line-length = 100
-target-version = "py311"
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+# The formatter owns line length; long lines left over are prompt text.
+ignore = ["E501"]
+
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = ["fastapi.Depends"]
