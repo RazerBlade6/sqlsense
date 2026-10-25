@@ -11,6 +11,13 @@ class ChartSpec(BaseModel):
     y_columns: list[str] = Field(default_factory=list)
 
 
+class Attempt(BaseModel):
+    attempt: int
+    sql: str | None = None
+    status: Literal["rejected", "failed", "succeeded"]
+    error: str | None = None
+
+
 class QueryRequest(BaseModel):
     question: str = Field(min_length=3, max_length=2000)
     max_attempts: int = Field(default=3, ge=1, le=5)
@@ -24,9 +31,14 @@ class QueryResponse(BaseModel):
     chart: ChartSpec = Field(default_factory=ChartSpec)
     explanation: str | None = None
     attempts: int = 0
+    attempt_log: list[Attempt] = Field(default_factory=list)
+    engine: str | None = None
+    bytes_scanned: int | None = None
+    execution_ms: int | None = None
+    truncated: bool = False
     error: str | None = None
 
 
 class SchemaResponse(BaseModel):
-    schemas: list[str]
+    engine: str
     summary: str

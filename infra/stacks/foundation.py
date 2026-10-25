@@ -60,6 +60,23 @@ class FoundationStack(Stack):
             subjects=[f"repo:{github_repo}:ref:refs/heads/*", f"repo:{github_repo}:pull_request"],
         )
         ci_role.add_to_policy(self._bedrock_invoke_statement())
+        # Read-only access for `cdk diff` on pull requests (no change sets, no deploy role).
+        ci_role.add_to_policy(
+            iam.PolicyStatement(
+                actions=["cloudformation:DescribeStacks", "cloudformation:GetTemplate"],
+                resources=[
+                    f"arn:aws:cloudformation:{self.region}:{self.account}:stack/SqlSense*/*"
+                ],
+            )
+        )
+        ci_role.add_to_policy(
+            iam.PolicyStatement(
+                actions=["ssm:GetParameter"],
+                resources=[
+                    f"arn:aws:ssm:{self.region}:{self.account}:parameter/cdk-bootstrap/hnb659fds/version"
+                ],
+            )
+        )
 
         deploy_role = self._github_role(
             provider,

@@ -1,21 +1,20 @@
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy.engine import Engine
 
 from app.agents.sql_agent import SQLQueryAgent
 from app.config import Settings, get_settings
-from app.db import get_engine
 from app.models import QueryRequest, QueryResponse, SchemaResponse
-from app.schema import build_schema_summary
+from app.warehouse import Warehouse
+from app.warehouse.factory import get_warehouse
 
 app = FastAPI(title="SQLSense API", version="0.2.0")
 
 
 def get_agent(
     settings: Settings = Depends(get_settings),
-    engine: Engine = Depends(get_engine),
+    warehouse: Warehouse = Depends(get_warehouse),
 ) -> SQLQueryAgent:
-    return SQLQueryAgent(engine, settings)
+    return SQLQueryAgent(warehouse, settings)
 
 
 settings = get_settings()
@@ -34,14 +33,8 @@ def health() -> dict[str, str]:
 
 
 @app.get("/schema", response_model=SchemaResponse)
-def schema(
-    current_settings: Settings = Depends(get_settings),
-    engine: Engine = Depends(get_engine),
-) -> SchemaResponse:
-    return SchemaResponse(
-        schemas=current_settings.schema_names,
-        summary=build_schema_summary(engine, current_settings.schema_names),
-    )
+def schema(warehouse: Warehouse = Depends(get_warehouse)) -> SchemaResponse:
+    return SchemaResponse(engine=warehouse.engine, summary=warehouse.schema_summary())
 
 
 @app.post("/query", response_model=QueryResponse)

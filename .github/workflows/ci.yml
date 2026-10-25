@@ -15,9 +15,22 @@ concurrency:
 jobs:
   backend:
     runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/build-warehouse
+      - name: Lint and test
+        working-directory: backend
+        run: |
+          uv sync --locked
+          uv run ruff check .
+          uv run ruff format --check .
+          uv run pytest
+
+  data:
+    runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: backend
+        working-directory: data
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
@@ -26,9 +39,8 @@ jobs:
       - run: uv sync --locked
       - run: uv run ruff check .
       - run: uv run ruff format --check .
-      - run: uv run pytest
 
-  bedrock-live:
+  eval:
     # Fork PRs can't request an OIDC token, so only run for this repo's own branches.
     if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
     needs: backend
@@ -36,20 +48,26 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    defaults:
-      run:
-        working-directory: backend
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/build-warehouse
       - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:
           role-to-assume: arn:aws:iam::825457798946:role/sqlsense-github-ci
           aws-region: ap-southeast-2
-      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+      - name: Live Bedrock test
+        working-directory: backend
+        run: |
+          uv sync --locked
+          uv run pytest -m live
+      - name: SQL agent eval (DuckDB, this branch's catalog)
+        working-directory: backend
+        run: uv run python -m evaluation.runner --min-accuracy 0.7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
         with:
-          enable-cache: true
-      - run: uv sync --locked
-      - run: uv run pytest -m live
+          name: eval-results
+          path: evals/results/*.json
 
   frontend:
     runs-on: ubuntu-latest
@@ -69,20 +87,61 @@ jobs:
 
   infra:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: infra
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
-        with:
-          enable-cache: true
+      # The data stack publishes the built warehouse as a CDK asset, so synth needs it.
+      - uses: ./.github/actions/build-warehouse
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
           cache: npm
           cache-dependency-path: infra/package-lock.json
-      - run: npm ci
-      - run: uv sync --locked
-      - run: uv run ruff check .
-      - run: npx cdk synth --quiet
+      - name: Lint, test and synth
+        working-directory: infra
+        run: |
+          npm ci
+          uv sync --locked
+          uv run ruff check .
+          uv run ruff format --check .
+          uv run pytest
+          npx cdk synth --quiet
+
+  plan:
+    # Show the infrastructure change on pull requests into main.
+    if: github.event_name == 'pull_request' && github.base_ref == 'main' && github.event.pull_request.head.repo.full_name == github.repository
+    needs: infra
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/build-warehouse
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: infra/package-lock.json
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: arn:aws:iam::825457798946:role/sqlsense-github-ci
+          aws-region: ap-southeast-2
+      - name: cdk diff
+        working-directory: infra
+        run: |
+          npm ci
+          uv sync --locked
+          npx cdk diff SqlSenseData --method=template 2>&1 | tee ../cdk-diff.txt
+      - name: Comment plan on the PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          {
+            echo "### Infrastructure plan (\`SqlSenseData\`)"
+            echo "Deploys on merge to \`main\` after approval in the \`production\` environment."
+            echo '```'
+            grep -vE "AI agent|feature flags" cdk-diff.txt | tail -c 60000
+            echo '```'
+          } > plan.md
+          gh pr comment ${{ github.event.pull_request.number }} --body-file plan.md --edit-last --create-if-none

@@ -2,28 +2,23 @@ from mcp.server.mcpserver import MCPServer
 
 from app.agents.sql_agent import SQLQueryAgent
 from app.config import get_settings
-from app.db import get_engine
-from app.schema import build_schema_summary
+from app.warehouse.factory import get_warehouse
 
 mcp = MCPServer("sqlsense")
 
 
 @mcp.tool()
-def ask_database(question: str, max_attempts: int = 3) -> dict:
-    """Answer a natural-language analytics question using safe PostgreSQL SELECT queries."""
-    settings = get_settings()
-    agent = SQLQueryAgent(get_engine(), settings)
+def ask_warehouse(question: str, max_attempts: int = 3) -> dict:
+    """Answer a natural-language question about the retail warehouse with a safe, read-only query."""
+    agent = SQLQueryAgent(get_warehouse(), get_settings())
     return agent.run(question, max_attempts).model_dump(mode="json")
 
 
 @mcp.tool()
-def get_database_schema() -> dict:
-    """Return the database schema summary visible to the SQL generation agent."""
-    settings = get_settings()
-    return {
-        "schemas": settings.schema_names,
-        "summary": build_schema_summary(get_engine(), settings.schema_names),
-    }
+def get_warehouse_schema() -> dict:
+    """Return the tables, columns and descriptions the SQL agent sees."""
+    warehouse = get_warehouse()
+    return {"engine": warehouse.engine, "summary": warehouse.schema_summary()}
 
 
 if __name__ == "__main__":

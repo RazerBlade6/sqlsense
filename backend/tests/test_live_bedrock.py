@@ -4,24 +4,18 @@ import pytest
 
 from app.agents.sql_agent import SQLQueryAgent
 from app.config import Settings
-from app.safety import validate_select_sql
-
-SCHEMA = (
-    "Table public.users: id integer primary key, email text not null, "
-    "plan text, created_at timestamp not null"
-)
+from app.warehouse.catalog import load_catalog
+from app.warehouse.duckdb_local import DEFAULT_DATA_PATH, DuckDBWarehouse
 
 
 @pytest.mark.live
-def test_sql_agent_generates_safe_sql() -> None:
-    settings = Settings(DATABASE_URL="postgresql+psycopg://unused@localhost/unused")
-    agent = SQLQueryAgent(engine=None, settings=settings)  # type: ignore[arg-type]
+def test_sql_agent_answers_from_local_warehouse() -> None:
+    catalog = load_catalog()
+    if not (DEFAULT_DATA_PATH / catalog["database"]).exists():
+        pytest.skip("run data/build.py first")
+    agent = SQLQueryAgent(DuckDBWarehouse(catalog), Settings())
 
-    state = agent._generate_sql(
-        {"question": "How many users are on each plan?", "schema": SCHEMA, "attempts": 0}
-    )
+    response = agent.run("How many distinct households made a purchase?")
 
-    sql = validate_select_sql(state["sql"])
-    assert "users" in sql.lower()
-    assert "group by" in sql.lower()
-    assert state["attempts"] == 1
+    assert response.error is None, response.attempt_log
+    assert response.rows and list(response.rows[0].values()) == [2469]

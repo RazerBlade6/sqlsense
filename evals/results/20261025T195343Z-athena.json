@@ -1,0 +1,203 @@
+{
+  "summary": {
+    "run_at": "2026-10-25T19:53:43+00:00",
+    "sql_model_id": "apac.amazon.nova-pro-v1:0",
+    "warehouse": "athena",
+    "git_sha": null,
+    "questions": 15,
+    "correct": 12,
+    "accuracy": 0.8,
+    "by_category": {
+      "aggregate": {
+        "correct": 3,
+        "total": 3
+      },
+      "definition": {
+        "correct": 0,
+        "total": 3
+      },
+      "join": {
+        "correct": 4,
+        "total": 4
+      },
+      "promotion": {
+        "correct": 1,
+        "total": 1
+      },
+      "time": {
+        "correct": 4,
+        "total": 4
+      }
+    },
+    "latency_p50_s": 4.15,
+    "latency_max_s": 10.6,
+    "avg_attempts": 1.33
+  },
+  "results": [
+    {
+      "id": "q01",
+      "category": "aggregate",
+      "question": "What were total sales across the whole dataset?",
+      "correct": true,
+      "reason": "ok",
+      "latency_s": 5.52,
+      "sql": "SELECT ROUND(SUM(sales_value), 2) AS total_sales FROM retail.fact_transactions LIMIT 100",
+      "attempts": 1,
+      "bytes_scanned": 1971795
+    },
+    {
+      "id": "q02",
+      "category": "aggregate",
+      "question": "How many shopping trips were made in total?",
+      "correct": true,
+      "reason": "ok",
+      "latency_s": 5.68,
+      "sql": "SELECT COUNT(DISTINCT t.basket_id) AS total_trips FROM retail.fact_transactions AS t LIMIT 100",
+      "attempts": 1,
+      "bytes_scanned": 1029916
+    },
+    {
+      "id": "q03",
+      "category": "aggregate",
+      "question": "How many households redeemed at least one coupon?",
+      "correct": true,
+      "reason": "ok",
+      "latency_s": 4.92,
+      "sql": "SELECT COUNT(DISTINCT household_id) AS num_households FROM retail.fact_coupon_redemption LIMIT 100",
+      "attempts": 1,
+      "bytes_scanned": 3225
+    },
+    {
+      "id": "q04",
+      "category": "join",
+      "question": "Which 5 departments had the highest sales?",
+      "correct": true,
+      "reason": "ok",
+      "latency_s": 5.97,
+      "sql": "SELECT dp.department, ROUND(SUM(ft.sales_value), 2) AS sales_value FROM retail.fact_transactions AS ft LEFT JOIN retail.dim_product AS dp ON ft.product_id = dp.product_id WHERE ft.week BETWEEN 1 AND 53 GROUP BY dp.department ORDER BY sales_value DESC LIMIT 5",
+      "attempts": 1,
+      "bytes_scanned": 6155109
+    },
+    {
+      "id": "q05",
+      "category": "join",
+      "question": "What percentage of sales came from private label products?",
+      "correct": true,
+      "reason": "ok",
+      "latency_s": 4.07,
+      "sql": "SELECT ROUND(SUM(CASE WHEN dp.brand = 'Private' THEN ft.sales_value ELSE 0 END) * 100 / SUM(ft.sales_value), 2) AS private_label_sales_percentage FROM retail.fact_transactions AS ft LEFT JOIN retail.dim_product AS dp ON ft.product_id = dp.product_id WHERE ft.week BETWEEN 1 AND 53 LIMIT 100",
+      "attempts": 1,
+      "bytes_scanned": 6126192
+    },
+    {
+      "id": "q06",
+      "category": "join",
+      "question": "Which 10 product categories in the grocery department sold the most units?",
+      "correct": true,
+      "reason": "ok",
+      "latency_s": 4.15,
+      "sql": "SELECT dp.product_category, SUM(ft.quantity) AS total_units_sold FROM retail.fact_transactions AS ft JOIN retail.dim_product AS dp ON ft.product_id = dp.product_id WHERE dp.department = 'GROCERY' AND ft.week BETWEEN 1 AND 53 GROUP BY dp.product_category ORDER BY total_units_sold DESC LIMIT 10",
+      "attempts": 1,
+      "bytes_scanned": 4745412
+    },
+    {
+      "id": "q07",
+      "category": "join",
+      "question": "How many households received each type of campaign?",
+      "correct": true,
+      "reason": "ok",
+      "latency_s": 3.99,
+      "sql": "SELECT d.campaign_type, COUNT(DISTINCT b.household_id) AS num_households FROM retail.dim_campaign AS d JOIN retail.bridge_campaign_household AS b ON d.campaign_id = b.campaign_id GROUP BY d.campaign_type ORDER BY num_households DESC LIMIT 100",
+      "attempts": 1,
+      "bytes_scanned": 10259
+    },
+    {
+      "id": "q08",
+      "category": "time",
+      "question": "Show weekly sales for the last 8 weeks.",
+      "correct": true,
+      "reason": "ok",
+      "latency_s": 2.99,
+      "sql": "SELECT week, ROUND(SUM(sales_value), 2) AS sales_value FROM retail.fact_transactions WHERE week BETWEEN 46 AND 53 GROUP BY week ORDER BY week LIMIT 100",
+      "attempts": 1,
+      "bytes_scanned": 307372
+    },
+    {
+      "id": "q09",
+      "category": "time",
+      "question": "What were total sales in each month of 2017?",
+      "correct": true,
+      "reason": "ok",
+      "latency_s": 6.73,
+      "sql": "SELECT ROUND(SUM(ft.sales_value), 2) AS total_sales, dd.month_name AS month FROM retail.fact_transactions AS ft JOIN retail.dim_date AS dd ON ft.transaction_date = dd.date_day WHERE dd.year = 2017 GROUP BY dd.month_name, dd.month ORDER BY dd.month ASC LIMIT 100",
+      "attempts": 2,
+      "bytes_scanned": 1989091
+    },
+    {
+      "id": "q10",
+      "category": "time",
+      "question": "How many shopping trips happened on weekends versus weekdays?",
+      "correct": true,
+      "reason": "ok",
+      "latency_s": 10.6,
+      "sql": "WITH trip_counts AS (SELECT COUNT(DISTINCT fact_transactions.basket_id) AS trips, CASE WHEN dim_date.is_weekend THEN 'Weekend' ELSE 'Weekday' END AS day_type FROM retail.fact_transactions JOIN retail.dim_date ON fact_transactions.transaction_date = dim_date.date_day GROUP BY CASE WHEN dim_date.is_weekend THEN 'Weekend' ELSE 'Weekday' END) SELECT * FROM trip_counts LIMIT 100",
+      "attempts": 3,
+      "bytes_scanned": 1046761
+    },
+    {
+      "id": "q11",
+      "category": "time",
+      "question": "What were sales by quarter in 2017?",
+      "correct": true,
+      "reason": "ok",
+      "latency_s": 3.97,
+      "sql": "SELECT dd.quarter, ROUND(SUM(ft.sales_value), 2) AS sales FROM retail.fact_transactions AS ft JOIN retail.dim_date AS dd ON ft.transaction_date = dd.date_day WHERE dd.year = 2017 GROUP BY dd.quarter ORDER BY dd.quarter LIMIT 100",
+      "attempts": 1,
+      "bytes_scanned": 1988869
+    },
+    {
+      "id": "q12",
+      "category": "definition",
+      "question": "What is the average basket value?",
+      "correct": false,
+      "reason": "no column in the result matches an expected column",
+      "latency_s": 3.68,
+      "sql": "SELECT ROUND(AVG(sales_value), 2) AS avg_basket_value FROM retail.fact_transactions LIMIT 100",
+      "attempts": 1,
+      "bytes_scanned": 1971795
+    },
+    {
+      "id": "q13",
+      "category": "definition",
+      "question": "What is the average basket value for each income band?",
+      "correct": false,
+      "reason": "no result: Query failed for SQL `SELECT dh.income, ROUND(AVG(ft.sales_value) OVER (PARTITION BY dh.income), 2) AS avg_basket_value FROM retail.fact_transactions AS ft JOIN retail.dim_household_demographics AS dh ON ft.household_id = dh.household_id WHERE ft.week BETWEEN 1 AND 53 GROUP BY dh.income ORDER BY avg_basket_value DESC LIMIT 100`: EXPRESSION_NOT_AGGREGATE: line 1:19: 'ROUND(AVG(ft.sales_value) OVER (PARTITION BY dh.income), 2)' must be an aggregate expression or appear in GROUP BY clause",
+      "latency_s": 9.37,
+      "sql": "SELECT dh.income, ROUND(AVG(ft.sales_value) OVER (PARTITION BY dh.income), 2) AS avg_basket_value FROM retail.fact_transactions AS ft JOIN retail.dim_household_demographics AS dh ON ft.household_id = dh.household_id WHERE ft.week BETWEEN 1 AND 53 GROUP BY dh.income ORDER BY avg_basket_value DESC LIMIT 100",
+      "attempts": 3,
+      "bytes_scanned": null
+    },
+    {
+      "id": "q14",
+      "category": "definition",
+      "question": "What percentage of purchasing households have demographic data?",
+      "correct": false,
+      "reason": "no column in the result matches an expected column",
+      "latency_s": 4.08,
+      "sql": "SELECT ROUND(COUNT(DISTINCT t.household_id) * 100.0 / COUNT(DISTINCT d.household_id), 2) AS percentage FROM retail.fact_transactions AS t LEFT JOIN retail.dim_household_demographics AS d ON t.household_id = d.household_id LIMIT 100",
+      "attempts": 1,
+      "bytes_scanned": 791871
+    },
+    {
+      "id": "q15",
+      "category": "promotion",
+      "question": "How many products were featured on the front page of the mailer in week 10?",
+      "correct": true,
+      "reason": "ok",
+      "latency_s": 2.99,
+      "sql": "SELECT COUNT(DISTINCT fp.product_id) AS product_count FROM retail.fact_promotion AS fp WHERE fp.week = 10 AND fp.mailer_location = 'D' LIMIT 100",
+      "attempts": 1,
+      "bytes_scanned": 147244
+    }
+  ]
+}

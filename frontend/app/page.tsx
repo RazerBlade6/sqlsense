@@ -22,9 +22,9 @@ type QueryResponse = {
 };
 
 const exampleQuestions = [
-  "How many new users signed up today?",
-  "Show daily signups for the last 14 days.",
-  "Which plans generated the most revenue this month?",
+  "Which 5 departments had the highest sales?",
+  "Show weekly sales for the last 8 weeks.",
+  "What percentage of sales came from private label products?",
 ];
 
 export default function Home() {

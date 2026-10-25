@@ -77,3 +77,7 @@ cdk.out/
 
 # Local agent instructions
 CLAUDE.md
+
+# Dataset (rebuilt by data/build.py)
+data/raw/
+data/warehouse/
