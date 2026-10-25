@@ -170,6 +170,7 @@ Hardening backlog: cdk-nag in `cdk synth`; re-bootstrap with a least-privilege C
 
 **Eval in CI**
 - [ ] ~50 questions across categories: simple aggregates (10), joins (10), time windows (8), definition-dependent "both" questions (8), docs-only (6), follow-ups (4), and adversarial/refusal cases (4).
+- [ ] Report the mean and spread of several runs: single runs vary by about one question even at temperature 0.
 - [ ] Metrics: execution accuracy, routing accuracy, retrieval recall@k, docs-answer faithfulness (an LLM judge checked against reference answers), p50/p95 latency, $/question, average bytes scanned.
 - [ ] `eval.yml`: run on PRs that touch `backend/`, `corpus/` or `evals/` (via the OIDC role). Post a markdown table comment with the change against `main`, and fail if accuracy drops by more than 3 points.
 

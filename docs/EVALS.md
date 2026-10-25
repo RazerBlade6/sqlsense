@@ -47,6 +47,8 @@ Amazon Nova Pro (`apac.amazon.nova-pro-v1:0`) at temperature 0, 15 questions:
 | definition | 1/3 | 0/3 |
 | **Total** | **13/15 (87%)** | **12/15 (80%)** |
 
+Runs vary by about one question even at temperature 0, because Bedrock output isn't fully deterministic (CI scored 14/15 on DuckDB for the same commit). Phase 3 will report the mean of several runs.
+
 All the misses are definition questions, for example averaging per product line instead of per basket, or an inner join dropping households without demographics.
 
 ### Fixes that came out of building the eval
