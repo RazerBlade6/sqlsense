@@ -1,12 +1,11 @@
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
-from app.agent import SQLQueryAgent
+from app.agents.sql_agent import SQLQueryAgent
 from app.config import get_settings
 from app.db import get_engine
 from app.schema import build_schema_summary
 
-
-mcp = FastMCP("sqlsense")
+mcp = MCPServer("sqlsense")
 
 
 @mcp.tool()

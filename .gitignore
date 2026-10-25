@@ -71,3 +71,9 @@ tmp/
 temp/
 *.tmp
 *.bak
+
+# CDK
+cdk.out/
+
+# Local agent instructions
+CLAUDE.md

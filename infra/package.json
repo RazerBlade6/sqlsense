@@ -1,0 +1,7 @@
+{
+  "name": "sqlsense-infra",
+  "private": true,
+  "devDependencies": {
+    "aws-cdk": "2.1146.1"
+  }
+}

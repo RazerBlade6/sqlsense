@@ -2,14 +2,13 @@ from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.engine import Engine
 
-from app.agent import SQLQueryAgent
+from app.agents.sql_agent import SQLQueryAgent
 from app.config import Settings, get_settings
 from app.db import get_engine
 from app.models import QueryRequest, QueryResponse, SchemaResponse
 from app.schema import build_schema_summary
 
-
-app = FastAPI(title="SQLSense API", version="0.1.0")
+app = FastAPI(title="SQLSense API", version="0.2.0")
 
 
 def get_agent(

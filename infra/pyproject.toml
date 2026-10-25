@@ -1,0 +1,24 @@
+[project]
+name = "sqlsense-infra"
+version = "0.2.0"
+description = "AWS CDK app for SQLSense"
+requires-python = ">=3.13,<3.14"
+dependencies = [
+  "aws-cdk-lib==2.274.0",
+  "constructs>=10.4.0,<11",
+]
+
+[dependency-groups]
+dev = ["ruff>=0.6.0"]
+
+[tool.uv]
+package = false
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+# The formatter owns line length.
+ignore = ["E501"]
