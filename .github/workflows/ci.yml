@@ -19,8 +19,8 @@ jobs:
       run:
         working-directory: backend
     steps:
-      - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
         with:
           enable-cache: true
       - run: uv sync --locked
@@ -40,12 +40,12 @@ jobs:
       run:
         working-directory: backend
     steps:
-      - uses: actions/checkout@v7
-      - uses: aws-actions/configure-aws-credentials@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:
           role-to-assume: arn:aws:iam::825457798946:role/sqlsense-github-ci
           aws-region: ap-southeast-2
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
         with:
           enable-cache: true
       - run: uv sync --locked
@@ -57,8 +57,8 @@ jobs:
       run:
         working-directory: frontend
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
           cache: npm
@@ -73,11 +73,11 @@ jobs:
       run:
         working-directory: infra
     steps:
-      - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
         with:
           enable-cache: true
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
           cache: npm
