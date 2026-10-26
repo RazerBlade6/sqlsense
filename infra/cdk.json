@@ -3,6 +3,7 @@
   "context": {
     "account": "825457798946",
     "github_repo": "RazerBlade6/sqlsense",
-    "monthly_budget_usd": 25
+    "monthly_budget_usd": 25,
+    "@aws-cdk/core:defaultCrossStackReferences": "strong"
   }
 }

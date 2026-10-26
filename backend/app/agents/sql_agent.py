@@ -5,7 +5,7 @@ from langgraph.graph import END, StateGraph
 from pydantic import BaseModel, Field
 
 from app.config import Settings
-from app.llm import with_structured_output
+from app.llm import invoke_structured, with_structured_output
 from app.models import Attempt, ChartSpec, QueryResponse
 from app.safety import SQLSafetyError, validate_select_sql
 from app.warehouse import Warehouse, WarehouseError
@@ -20,11 +20,15 @@ Write one Amazon Athena (Trino) SELECT query that answers the question from the 
 - Filter on week when the question covers a subset of weeks; the large fact tables are partitioned by it.
 - Round money to 2 decimal places. Give result columns short, readable snake_case aliases.
 - Return only the columns needed to answer, ordered sensibly, with a LIMIT for row-level or "top N" results.
+- When business definitions are given, follow them exactly: they set the metric formula, the period (for example which weeks a fiscal quarter covers) and any filters. If a definition includes an SQL pattern, start from that pattern (keeping its joins and denominators) and adapt only the filters and grouping.
 - If the previous attempt failed, read the error and fix the query.
 Pick the chart that best shows the result: number for a single value, line for time series, bar for comparisons across categories, table otherwise."""
 
 HUMAN_PROMPT = """Tables:
 {schema}
+
+Business definitions:
+{context}
 
 Question: {question}
 
@@ -44,6 +48,7 @@ class GeneratedSQL(BaseModel):
 class AgentState(TypedDict, total=False):
     question: str
     schema: str
+    context: str
     sql: str
     explanation: str
     chart: dict[str, Any]
@@ -56,6 +61,7 @@ class AgentState(TypedDict, total=False):
     execution_ms: int | None
     truncated: bool
     attempt_log: list[dict[str, Any]]
+    generation: dict[str, Any]
     error: str | None
 
 
@@ -74,11 +80,15 @@ class SQLQueryAgent:
         )
         self.graph = self._build_graph()
 
-    def run(self, question: str, max_attempts: int = 3) -> QueryResponse:
+    def run(
+        self, question: str, max_attempts: int = 3, context: str | None = None
+    ) -> QueryResponse:
+        """Answer from the warehouse. `context` carries document excerpts such as metric definitions."""
         final_state = self.graph.invoke(
             {
                 "question": question,
                 "schema": self.warehouse.schema_summary(),
+                "context": context or "none",
                 "attempts": 0,
                 "max_attempts": max_attempts,
                 "attempt_log": [],
@@ -124,11 +134,23 @@ class SQLQueryAgent:
 
     def _generate_sql(self, state: AgentState) -> AgentState:
         feedback = state.get("error") or "none"
-        raw = (self.prompt | self.sql_llm).invoke(
-            {"schema": state["schema"], "question": state["question"], "feedback": feedback}
+        call = invoke_structured(
+            self.prompt | self.sql_llm,
+            {
+                "schema": state["schema"],
+                "context": state.get("context", "none"),
+                "question": state["question"],
+                "feedback": feedback,
+            },
+            GeneratedSQL,
         )
-        generated = raw if isinstance(raw, GeneratedSQL) else GeneratedSQL.model_validate(raw)
+        generated = call.output
         return {
+            "generation": {
+                "generate_ms": call.duration_ms,
+                "input_tokens": call.input_tokens,
+                "output_tokens": call.output_tokens,
+            },
             "attempts": state.get("attempts", 0) + 1,
             "sql": generated.sql.strip(),
             "explanation": generated.explanation,
@@ -166,12 +188,24 @@ class SQLQueryAgent:
             "execution_ms": result.execution_ms,
             "truncated": result.truncated,
             "error": None,
-            **self._log(state, "succeeded", None),
+            **self._log(
+                state,
+                "succeeded",
+                None,
+                execution_ms=result.execution_ms,
+                bytes_scanned=result.bytes_scanned,
+            ),
         }
 
     @staticmethod
-    def _log(state: AgentState, status: str, error: str | None) -> AgentState:
-        entry = {"attempt": state.get("attempts", 0), "sql": state.get("sql"), "status": status}
+    def _log(state: AgentState, status: str, error: str | None, **metrics: Any) -> AgentState:
+        entry = {
+            "attempt": state.get("attempts", 0),
+            "sql": state.get("sql"),
+            "status": status,
+            **state.get("generation", {}),
+            **metrics,
+        }
         if error:
             entry["error"] = error
         return {"attempt_log": [*state.get("attempt_log", []), entry]}

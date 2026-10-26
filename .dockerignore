@@ -1,0 +1,8 @@
+# The Lambda image needs only the backend package, the catalog and the corpus.
+*
+!backend/pyproject.toml
+!backend/uv.lock
+!backend/app
+!catalog/retail.yaml
+!corpus
+**/__pycache__

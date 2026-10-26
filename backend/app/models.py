@@ -3,6 +3,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 ChartType = Literal["table", "bar", "line", "pie", "number"]
+Route = Literal["sql", "docs", "both", "clarify", "refuse"]
 
 
 class ChartSpec(BaseModel):
@@ -16,6 +17,11 @@ class Attempt(BaseModel):
     sql: str | None = None
     status: Literal["rejected", "failed", "succeeded"]
     error: str | None = None
+    generate_ms: int | None = None
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+    execution_ms: int | None = None
+    bytes_scanned: int | None = None
 
 
 class QueryRequest(BaseModel):
@@ -42,3 +48,44 @@ class QueryResponse(BaseModel):
 class SchemaResponse(BaseModel):
     engine: str
     summary: str
+
+
+class Citation(BaseModel):
+    id: int = Field(description="The [n] marker used in the answer.")
+    chunk_id: str
+    doc_id: str
+    doc_type: str
+    title: str
+    heading: str
+    path: str
+    content: str
+    score: float
+
+
+class TraceStep(BaseModel):
+    step: Literal["memory", "planner", "retrieval", "sql", "synthesizer"]
+    label: str
+    status: Literal["ok", "rejected", "failed"] = "ok"
+    duration_ms: int
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+    bytes_scanned: int | None = None
+    detail: dict[str, Any] = Field(default_factory=dict)
+
+
+class ChatRequest(BaseModel):
+    question: str = Field(min_length=3, max_length=2000)
+    session_id: str | None = Field(default=None, pattern=r"^[A-Za-z0-9-]{8,64}$")
+
+
+class ChatResponse(BaseModel):
+    session_id: str
+    question: str
+    standalone_question: str
+    route: Route
+    answer: str
+    citations: list[Citation] = Field(default_factory=list)
+    result: QueryResponse | None = None
+    trace: list[TraceStep] = Field(default_factory=list)
+    total_ms: int
+    error: str | None = None
