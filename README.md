@@ -2,7 +2,7 @@
 
 Natural-language analytics over SQL data, built with agents.
 
-> **Status: Phase 2.** A planner routes each question to warehouse SQL, document retrieval or both, and the UI shows an agent trace for every answer. The assistant scores 94–97% on a 36-question eval; on questions that depend on a business definition it improved from 1/3 to 12/13 (see [docs/EVALS.md](docs/EVALS.md)). Next: the production layer (observability, auth, data-quality agent).
+> **Status: Phase 2 done** ([live demo](https://d1gn5ggk7hwcu3.cloudfront.net)). A planner routes each question to warehouse SQL, document retrieval or both, and the UI shows an agent trace for every answer. The assistant scores 94–97% on a 36-question eval; on questions that depend on a business definition it improved from 1/3 to 12/13 (see [docs/EVALS.md](docs/EVALS.md)). Next: the production layer (observability, auth, data-quality agent).
 
 ## v2 at a glance
 

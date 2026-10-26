@@ -141,9 +141,9 @@ Hardening backlog: cdk-nag in `cdk synth`; re-bootstrap with a least-privilege C
 
 **Done when:** `POST /query` answers "top 10 categories by sales in the last 13 weeks" against Athena ✅ (weeks 41–53, partition-filtered, 1.7 MB scanned, 1.3 s). Baseline recorded ✅.
 
-## Phase 2: RAG, planner, memory, UI 🚧
+## Phase 2: RAG, planner, memory, UI ✅
 
-Built and evaluated locally; it is deployed and evaluated in production by CD on merge. Details are in [RETRIEVAL.md](RETRIEVAL.md) and [EVALS.md](EVALS.md).
+Details are in [RETRIEVAL.md](RETRIEVAL.md) and [EVALS.md](EVALS.md).
 
 **Document corpus** (synthetic, and labeled as synthetic)
 - [x] **Data dictionary:** one page per table, generated from the catalog and then annotated by hand with joins and caveats.
@@ -175,8 +175,11 @@ Built and evaluated locally; it is deployed and evaluated in production by CD on
 
 **Eval v1:** 36 questions, scored on execution accuracy, routing accuracy and retrieval recall@5.
 - [x] Local results: **94–97%** overall, definition questions **12/13** (Phase 1: 1/3), routing 97–100%, recall@5 90–95%.
+- [x] First post-deploy run against the deployed API (pgvector, Athena, DynamoDB memory): **36/36**, p50 latency 4.8 s.
 
-**Done when:** the deployed site answers a "both" question with citations and a trace, and the post-deploy eval passes.
+**Done when:** the deployed site answers a "both" question with citations and a trace ✅. "What was the household retention rate from Q3 to Q4?" retrieved the definition from pgvector, ran on Athena (0.4 MB scanned) and returned 96.55% with a citation. The post-deploy eval passes ✅.
+
+*First-deploy fix:* CDK applies `.dockerignore` when staging the image's build context, and the allowlist had dropped the Dockerfile itself. An infra test now checks the staged context.
 
 ## Phase 3: Production layer (~2 weeks)
 

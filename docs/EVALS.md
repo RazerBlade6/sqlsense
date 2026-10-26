@@ -45,7 +45,7 @@ Both gates fail below 70% accuracy.
 
 ## Phase 2 results
 
-Same models: Nova Micro (planner), Nova Pro (SQL and synthesis), Titan Embeddings V2. Run locally on DuckDB with local retrieval.
+Same models: Nova Micro (planner), Nova Pro (SQL and synthesis), Titan Embeddings V2. The table below is from local runs (DuckDB, local retrieval). The first post-deploy run against the production API (Athena, pgvector, DynamoDB memory) scored **36/36**, with p50 latency 4.8 s. That is one run, within the run-to-run variance noted below.
 
 | | Phase 1 (SQL agent only) | Phase 2 (assistant) |
 |---|---|---|
