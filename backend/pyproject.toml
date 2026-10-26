@@ -16,11 +16,13 @@ dependencies = [
   "mcp>=2.3.0",
   "duckdb>=2.0.0",
   "pyyaml>=6.0.3",
+  "mangum>=0.19.0",
 ]
 
 [dependency-groups]
 dev = [
   "botocore[crt]>=1.43.118",
+  "httpx>=0.28.0",
   "pytest>=8.3.0",
   "ruff>=0.6.0",
 ]

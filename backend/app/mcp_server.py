@@ -1,10 +1,20 @@
 from mcp.server.mcpserver import MCPServer
 
 from app.agents.sql_agent import SQLQueryAgent
+from app.api import get_assistant
 from app.config import get_settings
 from app.warehouse.factory import get_warehouse
 
 mcp = MCPServer("sqlsense")
+
+
+@mcp.tool()
+def ask_assistant(question: str) -> dict:
+    """Answer a question about the retail business from the warehouse and business documents.
+
+    Returns the answer, the route taken, any SQL and results, document citations and a trace.
+    """
+    return get_assistant().ask(question).model_dump(mode="json")
 
 
 @mcp.tool()

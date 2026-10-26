@@ -141,30 +141,42 @@ Hardening backlog: cdk-nag in `cdk synth`; re-bootstrap with a least-privilege C
 
 **Done when:** `POST /query` answers "top 10 categories by sales in the last 13 weeks" against Athena ✅ (weeks 41–53, partition-filtered, 1.7 MB scanned, 1.3 s). Baseline recorded ✅.
 
-## Phase 2: RAG, planner, memory, UI (~2 weeks)
+## Phase 2: RAG, planner, memory, UI 🚧
+
+Built and evaluated locally; it is deployed and evaluated in production by CD on merge. Details are in [RETRIEVAL.md](RETRIEVAL.md) and [EVALS.md](EVALS.md).
 
 **Document corpus** (synthetic, and labeled as synthetic)
-- [ ] **Data dictionary:** generated from Glue, then edited by hand (grain, caveats like "SALES_VALUE excludes coupon discounts").
-- [ ] **Metric definitions (~12):** active household, basket size, promo lift, coupon redemption rate, retention, and so on.
-- [ ] **Campaign briefs (~15–30):** one per campaign (TypeA/B/C), with goal, target segment and dates, based on the real `campaign_desc` and `coupon` tables.
-- [ ] **Policy docs:** fiscal calendar, returns handling.
+- [x] **Data dictionary:** one page per table, generated from the catalog and then annotated by hand with joins and caveats.
+- [x] **Metric definitions (13):** net sales, discounts, trips, basket value and size, active and lapsed households, spend per household, private label share, coupon redemption rate, promotion lift, retention, demographic coverage. Each has an Athena SQL pattern, and every pattern is executed in a check.
+- [x] **Campaign briefs (27) and campaign types:** facts (dates, households, coupons, departments) from the warehouse; the objective, audience and redemption target are invented.
+- [x] **Policy docs:** fiscal calendar, sales reporting rules (returns, zero-value lines, fuel), data privacy.
 
 **Retrieval agent**
-- [ ] Chunk by markdown heading (~400–800 tokens), with metadata (`doc_type`, `campaign_id`, `metric_name`).
-- [ ] Hybrid search: pgvector cosine plus Postgres `tsvector` keyword search, merged with reciprocal rank fusion (RRF). Return chunks with citations.
-- [ ] **CDK `RetrievalStack`:** Aurora Serverless v2 (min 0 ACU), Data API enabled, credentials in Secrets Manager, plus an ingest script.
+- [x] Documents of up to about 800 tokens stay whole; longer ones split at headings. Chunks carry `doc_type` and `campaign_id`/`metric_name` metadata.
+- [x] Hybrid search: vector plus keyword rankings merged with RRF per query, then interleaved across queries. Results come back with citations.
+- [x] **CDK `SqlSenseRetrieval`:**
+  - Aurora Serverless v2 at a minimum of 0 ACU, with the Data API, in an isolated VPC (no NAT).
+  - A `SELECT`-only reader role for the API.
+  - A custom resource that re-indexes the corpus on deploy.
 
 **Planner and graph**
-- [ ] The planner outputs structured `{route: sql | docs | both | clarify | refuse, sub_questions, needs_definitions[]}`.
-- [ ] The **"both" route runs in sequence:** retrieval first resolves definitions (e.g. "active household = ≥1 purchase in the trailing 8 weeks"), and those go to the SQL agent as context.
-- [ ] A synthesizer writes the final answer with the numbers, the SQL, the citations and a chart spec.
-- [ ] Memory: load the last N turns from DynamoDB; the planner rewrites follow-ups into standalone questions.
+- [x] The planner outputs `{route, standalone_question, needs_definitions, message}`. A glossary guard upgrades `sql` to `both` when the question uses a documented term. *Dropped `sub_questions`: no eval question needed decomposition.*
+- [x] The **"both" route runs in sequence:** retrieved definitions, including their SQL patterns, go to the SQL agent as context.
+- [x] The synthesizer writes the answer with the numbers and citations. The SQL agent supplies the SQL and chart spec.
+- [x] Memory: the last 5 turns per session in DynamoDB (with a TTL); the planner rewrites follow-ups into standalone questions.
 
-**UI** (extend the existing Next app)
-- [ ] Chat thread with session ID; answer card; collapsible SQL; citations; Recharts chart.
-- [ ] Agent trace panel: a timeline of planner → retrieval → SQL attempts (with errors) → synthesis, with latency, tokens and bytes scanned per step.
+**Hosting**
+- [x] **CDK `SqlSenseApp`:** FastAPI in a Lambda container image behind a Function URL, with a daily question budget and reserved concurrency. The static Next export is served from S3 behind CloudFront (origin access control). The API URL is delivered as `config.json` at deploy time.
+- [x] CI builds the Lambda image and calls it through the Lambda runtime emulator. CD deploys all three application stacks, then evaluates the **deployed API**.
 
-**Eval v1:** grow to ~35 questions and add scoring for routing accuracy and retrieval recall@5.
+**UI** (extended the existing Next app)
+- [x] Chat thread with a session ID; answer cards with route, collapsible SQL and rows, citations and a Recharts chart.
+- [x] Agent trace panel: a timeline of planner → retrieval (with vector and keyword ranks) → SQL attempts (with errors) → synthesis, showing latency, tokens and bytes scanned for each step. *The trace comes back with the `/chat` response, so there is no `/trace/{id}` endpoint yet; it arrives with the Phase 3 audit log.*
+
+**Eval v1:** 36 questions, scored on execution accuracy, routing accuracy and retrieval recall@5.
+- [x] Local results: **94–97%** overall, definition questions **12/13** (Phase 1: 1/3), routing 97–100%, recall@5 90–95%.
+
+**Done when:** the deployed site answers a "both" question with citations and a trace, and the post-deploy eval passes.
 
 ## Phase 3: Production layer (~2 weeks)
 

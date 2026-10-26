@@ -4,7 +4,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "SQLSense",
-  description: "Natural language PostgreSQL querying with safe SELECT-only execution",
+  description: "Multi-agent analytics assistant over a retail data warehouse",
 };
 
 export default function RootLayout({

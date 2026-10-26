@@ -19,6 +19,18 @@ INFERENCE_PROFILES = [
     "au.anthropic.claude-haiku-5-5",
 ]
 
+
+def bedrock_invoke_statement(stack: Stack) -> iam.PolicyStatement:
+    return iam.PolicyStatement(
+        actions=["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"],
+        resources=[f"arn:aws:bedrock:*::foundation-model/{m}" for m in BEDROCK_MODELS]
+        + [
+            f"arn:aws:bedrock:{stack.region}:{stack.account}:inference-profile/{p}"
+            for p in INFERENCE_PROFILES
+        ],
+    )
+
+
 # Kept in SSM rather than the repo, which is public.
 BUDGET_EMAIL_PARAMETER = "/sqlsense/budget-email"
 
@@ -59,7 +71,7 @@ class FoundationStack(Stack):
             description="GitHub Actions CI (branches and pull requests): invoke Bedrock models",
             subjects=[f"repo:{github_repo}:ref:refs/heads/*", f"repo:{github_repo}:pull_request"],
         )
-        ci_role.add_to_policy(self._bedrock_invoke_statement())
+        ci_role.add_to_policy(bedrock_invoke_statement(self))
         # Read-only access for `cdk diff` on pull requests (no change sets, no deploy role).
         ci_role.add_to_policy(
             iam.PolicyStatement(
@@ -121,16 +133,6 @@ class FoundationStack(Stack):
                     "StringLike": {"token.actions.githubusercontent.com:sub": subjects},
                 },
             ),
-        )
-
-    def _bedrock_invoke_statement(self) -> iam.PolicyStatement:
-        return iam.PolicyStatement(
-            actions=["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"],
-            resources=[f"arn:aws:bedrock:*::foundation-model/{m}" for m in BEDROCK_MODELS]
-            + [
-                f"arn:aws:bedrock:{self.region}:{self.account}:inference-profile/{p}"
-                for p in INFERENCE_PROFILES
-            ],
         )
 
     def _budget(self, limit_usd: int, email: str) -> None:
