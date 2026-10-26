@@ -88,3 +88,21 @@ def test_site_is_private_behind_cloudfront(stacks) -> None:
             )
         },
     )
+
+
+def test_staged_image_context_contains_the_dockerfile(tmp_path: Path) -> None:
+    """CDK applies .dockerignore when staging the build context; the Dockerfile must survive."""
+    site = tmp_path / "site"
+    site.mkdir()
+    (site / "index.html").write_text("<html></html>")
+    app = cdk.App(outdir=str(tmp_path / "out"))
+    retrieval = RetrievalStack(app, "Retrieval", env=ENV)
+    ApplicationStack(app, "App", env=ENV, retrieval=retrieval, site_dir=site)
+    assembly = app.synth()
+
+    assets = json.loads(Path(assembly.directory, "App.assets.json").read_text())
+    (image,) = assets["dockerImages"].values()
+    context = Path(assembly.directory, image["source"]["directory"])
+    assert (context / image["source"]["dockerFile"]).is_file()
+    for needed in ("backend/uv.lock", "backend/app/api.py", "catalog/retail.yaml", "corpus"):
+        assert (context / needed).exists(), needed

@@ -1,5 +1,7 @@
-# The Lambda image needs only the backend package, the catalog and the corpus.
+# The Lambda image needs only the backend package, the catalog and the corpus. CDK applies
+# this file when staging the build context, so the Dockerfile must be re-included too.
 *
+!backend/Dockerfile
 !backend/pyproject.toml
 !backend/uv.lock
 !backend/app
